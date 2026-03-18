@@ -1,0 +1,164 @@
+/* === Kyron Medical - Liquid Glass Design System === */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --kyron-blue: #0A6EBD;
+  --kyron-teal: #12A89D;
+  --kyron-dark: #0a1628;
+  --kyron-darker: #060d18;
+  --kyron-light: #e8f4fd;
+  --glass-bg: rgba(15, 25, 50, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-blur: 20px;
+  --text-primary: #f0f4f8;
+  --text-secondary: rgba(224, 232, 240, 0.7);
+  --text-muted: rgba(180, 195, 210, 0.5);
+  --accent-gradient: linear-gradient(135deg, #0A6EBD 0%, #12A89D 100%);
+  --accent-glow: rgba(10, 110, 189, 0.4);
+  --teal-glow: rgba(18, 168, 157, 0.4);
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--kyron-darker);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(10, 110, 189, 0.15) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(18, 168, 157, 0.12) 0%, transparent 50%),
+              radial-gradient(ellipse at 50% 80%, rgba(10, 110, 189, 0.08) 0%, transparent 50%),
+              var(--kyron-darker);
+  animation: bgShift 20s ease-in-out infinite alternate;
+}
+
+@keyframes bgShift {
+  0% {
+    background: radial-gradient(ellipse at 20% 50%, rgba(10, 110, 189, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(18, 168, 157, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(10, 110, 189, 0.08) 0%, transparent 50%),
+                var(--kyron-darker);
+  }
+  50% {
+    background: radial-gradient(ellipse at 40% 30%, rgba(18, 168, 157, 0.18) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 70%, rgba(10, 110, 189, 0.14) 0%, transparent 50%),
+                radial-gradient(ellipse at 20% 80%, rgba(18, 168, 157, 0.1) 0%, transparent 50%),
+                var(--kyron-darker);
+  }
+  100% {
+    background: radial-gradient(ellipse at 60% 60%, rgba(10, 110, 189, 0.16) 0%, transparent 50%),
+                radial-gradient(ellipse at 30% 40%, rgba(18, 168, 157, 0.13) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(10, 110, 189, 0.09) 0%, transparent 50%),
+                var(--kyron-darker);
+  }
+}
+
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: orbFloat 15s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb-1 { width: 400px; height: 400px; background: var(--kyron-blue); top: -100px; right: -100px; }
+.orb-2 { width: 300px; height: 300px; background: var(--kyron-teal); bottom: -50px; left: -50px; animation-delay: -5s; }
+.orb-3 { width: 250px; height: 250px; background: linear-gradient(135deg, var(--kyron-blue), var(--kyron-teal)); top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; opacity: 0.15; }
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -30px) scale(1.05); }
+  50% { transform: translate(-20px, 20px) scale(0.95); }
+  75% { transform: translate(20px, 10px) scale(1.02); }
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+  transition: var(--transition-smooth);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(10, 110, 189, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(18, 168, 157, 0.5); }
+}
+
+.animate-fade-in { animation: fadeInUp 0.4s ease-out; }
+
+.btn-primary {
+  background: var(--accent-gradient);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(10, 110, 189, 0.4);
+}
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  backdrop-filter: blur(10px);
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
