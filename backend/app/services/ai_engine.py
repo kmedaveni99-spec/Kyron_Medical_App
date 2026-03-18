@@ -8,8 +8,8 @@ from app.config import settings
 from app.services.local_fallback_store import save_fallback_event
 
 # --------------- Provider Setup ---------------
-# Priority: OpenAI -> Groq -> OpenRouter -> Gemini -> Ollama -> Mock
-# Groq/OpenRouter/Ollama use OpenAI-compatible APIs.
+# Priority: OpenAI -> Groq -> OpenRouter -> Gemini -> Mock
+# Groq/OpenRouter use OpenAI-compatible APIs.
 
 AVAILABLE_PROVIDERS: list[dict] = []
 
@@ -45,17 +45,6 @@ if settings.google_api_key:
         "name": "gemini",
         "model": "gemini-2.0-flash",
         "client": None,
-    })
-
-# Optional local fallback (no API key needed in default localhost setup).
-if settings.ollama_base_url:
-    AVAILABLE_PROVIDERS.append({
-        "name": "ollama",
-        "model": settings.ollama_model,
-        "client": AsyncOpenAI(
-            api_key="ollama",
-            base_url=settings.ollama_base_url,
-        ),
     })
 
 if AVAILABLE_PROVIDERS:
@@ -327,27 +316,29 @@ async def get_mock_response(user_message: str, session_id: str = "",
             "assess your condition. Would you like me to help you book an appointment?"
         ), None
 
-    # Scheduling - detect body part
-    schedule_kw = ["schedule", "appointment", "book", "see a doctor", "visit", "check-up", "checkup"]
-    if any(kw in msg for kw in schedule_kw) or state.stage in ["greeting", "asked_reason", "collecting_info"]:
-        detected = None
-        for specialty, keywords in MOCK_BODY_KEYWORDS.items():
-            if any(kw in msg for kw in keywords):
-                detected = specialty
-                break
+    # Detect specialty keywords globally so short follow-ups like "skin" work reliably.
+    detected_specialty = None
+    for specialty, keywords in MOCK_BODY_KEYWORDS.items():
+        if any(kw in msg for kw in keywords):
+            detected_specialty = specialty
+            break
 
-        if detected:
-            state.matched_specialty = detected
+    # Scheduling - detect body part / scheduling intent
+    schedule_kw = ["schedule", "appointment", "book", "see a doctor", "visit", "check-up", "checkup"]
+    has_schedule_intent = any(kw in msg for kw in schedule_kw)
+    if has_schedule_intent or detected_specialty or state.stage in ["greeting", "asked_reason", "collecting_info"]:
+        if detected_specialty:
+            state.matched_specialty = detected_specialty
             state.stage = "collecting_info"
             return (
                 f"I'd be happy to help you schedule an appointment! Based on what you've described, "
-                f"I'd recommend you see our {detected.title()} specialist. "
+                f"I'd recommend you see our {detected_specialty.title()} specialist. "
                 f"To get you set up, could you please provide your:\n\n"
                 f"• Full name\n• Date of birth\n• Phone number\n• Email address\n\n"
                 f"You can share all of this in one message!"
             ), None
 
-        if state.stage in ("greeting", "asked_reason"):
+        if has_schedule_intent or state.stage in ("greeting", "asked_reason"):
             state.stage = "collecting_info"
             return (
                 "I'd be happy to help you schedule an appointment! "
@@ -589,7 +580,7 @@ async def _call_gemini(provider: dict, messages, use_tools=True):
 
 async def _call_provider(provider: dict, messages, use_tools=True):
     """Dispatch call to the appropriate provider implementation."""
-    if provider["name"] in ("openai", "groq", "openrouter", "ollama"):
+    if provider["name"] in ("openai", "groq", "openrouter"):
         return await _call_openai_compatible(provider, messages, use_tools=use_tools)
     if provider["name"] == "gemini":
         if any(msg.get("role") == "tool" for msg in messages):

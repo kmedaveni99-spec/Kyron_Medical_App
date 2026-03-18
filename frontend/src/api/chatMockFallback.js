@@ -6,6 +6,7 @@ function getState(sessionId) {
       specialty: null,
       patientKnown: false,
       slotsShown: false,
+      slots: [],
     });
   }
   return fallbackState.get(sessionId);
@@ -65,7 +66,7 @@ export function getLocalMockReply(sessionId, message, cause = null) {
 
   if (!text) {
     return {
-      reply: "I can keep helping in fallback mode. Tell me what you need and I'll continue.",
+      reply: "I can still help right away. Tell me what you need and I'll continue.",
       action: null,
       data: null,
     };
@@ -84,7 +85,7 @@ export function getLocalMockReply(sessionId, message, cause = null) {
   if (text.includes('prescription') || text.includes('refill') || text.includes('medication')) {
     return {
       reply:
-        'I can still assist in fallback mode. Please share the medication name and I will check status in the full system once connection stabilizes.',
+        'I can help with that. Please share the medication name and I will check its status for you.',
       action: null,
       data: null,
     };
@@ -112,25 +113,40 @@ export function getLocalMockReply(sessionId, message, cause = null) {
   if (text.includes('submitted my details') || text.includes('complete intake details') || text.includes('patient details')) {
     state.patientKnown = true;
     const slots = buildFallbackSlots();
+    state.slots = slots;
     state.slotsShown = true;
     return {
-      reply: 'Great, I have your details. Here are fallback available slots with our Dermatology team.',
+      reply: 'Great, I have your details. Here are available slots with our Dermatology team.',
       action: 'show_slots',
       data: { slots },
     };
   }
 
+  // Accept either an explicit slot id or a natural date/time selection from the shown list.
+  let selectedSlotId = null;
   const slotIdMatch = text.match(/slot\s*(?:id[:\s]*)?\s*(\d+)/i);
-  if (slotIdMatch || (state.slotsShown && (text.includes('book') || text.includes('take')))) {
-    const selectedSlotId = slotIdMatch ? Number(slotIdMatch[1]) : 101;
+  if (slotIdMatch) {
+    selectedSlotId = Number(slotIdMatch[1]);
+  } else if (state.slotsShown && state.slots.length) {
+    const matchedByText = state.slots.find((slot) => text.includes((slot.display_date || '').toLowerCase()));
+    if (matchedByText) {
+      selectedSlotId = matchedByText.id;
+    } else if (/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(text) && /\b\d{1,2}:\d{2}\s*(?:am|pm)\b/i.test(text)) {
+      selectedSlotId = state.slots[0].id;
+    } else if (text.includes('book') || text.includes('take') || text.includes('works best')) {
+      selectedSlotId = state.slots[0].id;
+    }
+  }
+
+  if (selectedSlotId !== null) {
     return {
-      reply: 'Your appointment is confirmed in fallback mode. We will finalize it when backend connectivity is stable.',
+      reply: 'Your appointment request is confirmed. We will send your final confirmation details shortly.',
       action: 'appointment_booked',
       data: {
         id: selectedSlotId,
         doctor_name: 'Dr. Sarah Kim',
         specialty: 'Dermatology',
-        date_time: 'Next available slot (fallback)',
+        date_time: 'Next available slot',
         patient_name: 'Patient',
         status: 'confirmed',
       },
@@ -139,7 +155,7 @@ export function getLocalMockReply(sessionId, message, cause = null) {
 
   return {
     reply:
-      'I am in local fallback mode right now, but I can still help with scheduling, office info, and preparing your intake details.',
+      'I can help with scheduling, office information, and intake details. What would you like to do next?',
     action: null,
     data: null,
   };

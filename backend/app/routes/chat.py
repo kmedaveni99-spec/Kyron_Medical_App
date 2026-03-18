@@ -1,5 +1,6 @@
 """Chat route - main conversational endpoint."""
 import datetime
+import re
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -18,6 +19,27 @@ router = APIRouter()
 
 # In-memory session context store (in production, use Redis)
 session_contexts: dict[str, dict] = {}
+
+INTERNAL_STATUS_PATTERNS = [
+    r"\blocal fallback mode\b",
+    r"\bfallback mode\b",
+    r"\bprovider error\b",
+    r"\bapi (?:provider )?failed\b",
+    r"\boffline mode\b",
+]
+
+
+def sanitize_customer_reply(reply: str) -> str:
+    """Remove internal reliability/debug language before returning text to patients."""
+    if not reply:
+        return reply
+
+    cleaned = reply
+    for pattern in INTERNAL_STATUS_PATTERNS:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned or "I can still help you with scheduling, refill status, and office information."
 
 OFFICE_INFO = {
     "name": "Kyron Medical Practice",
@@ -43,6 +65,40 @@ OFFICE_INFO = {
         {"name": "Dr. Emily Chen", "specialty": "Gastroenterology"}
     ]
 }
+
+
+def _extract_reason_hint(text: str) -> str:
+    """Extract a likely visit reason from a free-text message."""
+    msg = (text or "").lower()
+    reason_map = {
+        "dermatology": ["skin", "rash", "acne", "eczema", "itch", "mole"],
+        "orthopedics": ["joint", "knee", "hip", "shoulder", "back", "bone"],
+        "cardiology": ["heart", "chest", "blood pressure", "cardiac", "palpitation"],
+        "neurology": ["head", "headache", "migraine", "nerve", "dizzy", "memory"],
+        "gastroenterology": ["stomach", "abdomen", "digestive", "nausea", "bowel", "gut"],
+    }
+    for specialty, keywords in reason_map.items():
+        if any(k in msg for k in keywords):
+            return specialty
+    return ""
+
+
+def _extract_selected_slot_id(user_message: str, available_slots: list[dict]) -> int | None:
+    """Resolve the chosen slot id from explicit id text or display-date text."""
+    text = (user_message or "").lower().strip()
+    if not text or not available_slots:
+        return None
+
+    id_match = re.search(r"slot\s*(?:id[:\s]*)?\s*(\d+)", text, flags=re.IGNORECASE)
+    if id_match:
+        return int(id_match.group(1))
+
+    for slot in available_slots:
+        display_date = (slot.get("display_date") or "").lower()
+        if display_date and display_date in text:
+            return int(slot.get("id"))
+
+    return None
 
 # Simulated prescription data
 RX_DATABASE = {
@@ -294,6 +350,74 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
     # Get session context
     ctx = session_contexts.get(session_id, {})
 
+    # Deterministic continuation after form intake to prevent loops asking for details again.
+    submitted_details_phrases = (
+        "submitted my details",
+        "complete intake",
+        "already submitted",
+        "patient form",
+    )
+    if ctx.get("patient") and any(p in user_message.lower() for p in submitted_details_phrases):
+        reason = ctx.get("intake_reason") or _extract_reason_hint(user_message)
+        if reason:
+            doctor_data = await match_doctor(reason, db)
+            if doctor_data:
+                ctx["matched_doctor"] = doctor_data
+                session_contexts[session_id] = ctx
+                slots = await get_available_slots(doctor_data["id"], db)
+
+                if slots:
+                    ctx["available_slots"] = slots
+                    session_contexts[session_id] = ctx
+                    reply = (
+                        f"Great, I have your details. I matched you with {doctor_data['name']} "
+                        f"({doctor_data['specialty']}). Here are the available appointments."
+                    )
+                    reply = sanitize_customer_reply(reply)
+                    await save_message(conversation.id, "assistant", reply, db)
+                    return ChatResponse(reply=reply, action="show_slots", data={"slots": slots})
+
+                reply = "Thanks, I have your details. I couldn't find open slots right now. Would you like to try a different day?"
+                reply = sanitize_customer_reply(reply)
+                await save_message(conversation.id, "assistant", reply, db)
+                return ChatResponse(reply=reply)
+
+    # Deterministic booking path after slots are shown, so slot picks always confirm properly.
+    available_slots = ctx.get("available_slots") or []
+    if ctx.get("patient") and available_slots:
+        selected_slot_id = _extract_selected_slot_id(user_message, available_slots)
+        wants_booking = selected_slot_id is not None or any(
+            phrase in user_message.lower()
+            for phrase in ("i'll take", "ill take", "book", "that slot", "this slot", "works best")
+        )
+
+        if wants_booking:
+            if selected_slot_id is None and len(available_slots) == 1:
+                selected_slot_id = int(available_slots[0]["id"])
+
+            if selected_slot_id is None:
+                reply = "Please choose one of the available time slots, and I will confirm it right away."
+                reply = sanitize_customer_reply(reply)
+                await save_message(conversation.id, "assistant", reply, db)
+                return ChatResponse(reply=reply, action="show_slots", data={"slots": available_slots})
+
+            booking_reason = ctx.get("intake_reason") or ctx.get("matched_doctor", {}).get("specialty") or "appointment"
+            book_result = await execute_tool_call(
+                "book_appointment",
+                {"slot_id": selected_slot_id, "reason": booking_reason},
+                session_id,
+                db,
+            )
+
+            if book_result.get("success"):
+                reply = sanitize_customer_reply(book_result.get("message", "Your appointment is confirmed."))
+                await save_message(conversation.id, "assistant", reply, db)
+                return ChatResponse(reply=reply, action="appointment_booked", data=book_result["appointment"])
+
+            reply = sanitize_customer_reply(book_result.get("message", "That slot is no longer available. Please choose another time."))
+            await save_message(conversation.id, "assistant", reply, db)
+            return ChatResponse(reply=reply, action="show_slots", data={"slots": available_slots})
+
     # Get AI response
     reply, tool_calls = await get_ai_response(history, ctx, session_id=session_id)
 
@@ -340,6 +464,8 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             history, tool_results, tool_calls, session_contexts.get(session_id, {}), session_id=session_id
         )
 
+    reply = sanitize_customer_reply(reply)
+
     # Save assistant reply
     if reply:
         await save_message(conversation.id, "assistant", reply, db)
@@ -385,7 +511,8 @@ async def submit_intake(intake: PatientIntake, db: AsyncSession = Depends(get_db
                 "phone": patient.phone,
                 "email": patient.email,
                 "sms_opt_in": patient.sms_opt_in,
-            }
+            },
+            "intake_reason": intake.reason,
         }
 
         sync_mock_intake_state(

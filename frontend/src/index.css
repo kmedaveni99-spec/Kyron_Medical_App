@@ -1,23 +1,32 @@
-/* === Kyron Medical - Liquid Glass Design System === */
+/* === Kyron Medical - Premium Dark Design System === */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
-  --kyron-blue: #0A6EBD;
-  --kyron-teal: #12A89D;
-  --kyron-dark: #0a1628;
-  --kyron-darker: #060d18;
-  --kyron-light: #e8f4fd;
-  --glass-bg: rgba(15, 25, 50, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --kyron-blue: #2563EB;
+  --kyron-teal: #14B8A6;
+  --kyron-dark: #101829;
+  --kyron-darker: #0A0F1F;
+  --kyron-light: #E2E8F0;
+  --glass-bg: rgba(30, 41, 55, 0.68);
+  --glass-border: rgba(148, 163, 184, 0.22);
+  --glass-shadow: 0 12px 36px rgba(2, 6, 23, 0.55);
   --glass-blur: 20px;
-  --text-primary: #f0f4f8;
-  --text-secondary: rgba(224, 232, 240, 0.7);
-  --text-muted: rgba(180, 195, 210, 0.5);
-  --accent-gradient: linear-gradient(135deg, #0A6EBD 0%, #12A89D 100%);
-  --accent-glow: rgba(10, 110, 189, 0.4);
-  --teal-glow: rgba(18, 168, 157, 0.4);
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --accent-gradient: linear-gradient(135deg, #2563EB 0%, #A855F7 100%);
+  --accent-glow: rgba(37, 99, 235, 0.42);
+  --teal-glow: rgba(20, 184, 166, 0.34);
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --bg-primary: #0A0F1F;
+  --bg-card: #1E2937;
+  --border-neutral: #334155;
+  --danger: #EF4444;
+  --success: #22C55E;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --shadow-glow: 0 10px 30px rgba(37, 99, 235, 0.25);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,7 +39,7 @@ html, body, #root {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--kyron-darker);
+  background: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }
@@ -39,31 +48,47 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(ellipse at 20% 50%, rgba(10, 110, 189, 0.15) 0%, transparent 50%),
-              radial-gradient(ellipse at 80% 20%, rgba(18, 168, 157, 0.12) 0%, transparent 50%),
-              radial-gradient(ellipse at 50% 80%, rgba(10, 110, 189, 0.08) 0%, transparent 50%),
-              var(--kyron-darker);
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    radial-gradient(ellipse at 20% 40%, rgba(37, 99, 235, 0.16) 0%, transparent 52%),
+    radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(20, 184, 166, 0.1) 0%, transparent 55%),
+    var(--bg-primary);
+  background-size: 34px 34px, 34px 34px, auto, auto, auto, auto;
   animation: bgShift 20s ease-in-out infinite alternate;
 }
 
 @keyframes bgShift {
   0% {
-    background: radial-gradient(ellipse at 20% 50%, rgba(10, 110, 189, 0.15) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 20%, rgba(18, 168, 157, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 80%, rgba(10, 110, 189, 0.08) 0%, transparent 50%),
-                var(--kyron-darker);
+    background:
+      linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      radial-gradient(ellipse at 20% 40%, rgba(37, 99, 235, 0.16) 0%, transparent 52%),
+      radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.14) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 85%, rgba(20, 184, 166, 0.1) 0%, transparent 55%),
+      var(--bg-primary);
+    background-size: 34px 34px, 34px 34px, auto, auto, auto, auto;
   }
   50% {
-    background: radial-gradient(ellipse at 40% 30%, rgba(18, 168, 157, 0.18) 0%, transparent 50%),
-                radial-gradient(ellipse at 70% 70%, rgba(10, 110, 189, 0.14) 0%, transparent 50%),
-                radial-gradient(ellipse at 20% 80%, rgba(18, 168, 157, 0.1) 0%, transparent 50%),
-                var(--kyron-darker);
+    background:
+      linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+      radial-gradient(ellipse at 35% 25%, rgba(168, 85, 247, 0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 70%, rgba(37, 99, 235, 0.14) 0%, transparent 52%),
+      radial-gradient(ellipse at 15% 80%, rgba(20, 184, 166, 0.12) 0%, transparent 55%),
+      var(--bg-primary);
+    background-size: 34px 34px, 34px 34px, auto, auto, auto, auto;
   }
   100% {
-    background: radial-gradient(ellipse at 60% 60%, rgba(10, 110, 189, 0.16) 0%, transparent 50%),
-                radial-gradient(ellipse at 30% 40%, rgba(18, 168, 157, 0.13) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(10, 110, 189, 0.09) 0%, transparent 50%),
-                var(--kyron-darker);
+    background:
+      linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      radial-gradient(ellipse at 60% 60%, rgba(37, 99, 235, 0.17) 0%, transparent 54%),
+      radial-gradient(ellipse at 28% 45%, rgba(20, 184, 166, 0.13) 0%, transparent 50%),
+      radial-gradient(ellipse at 82% 80%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+      var(--bg-primary);
+    background-size: 34px 34px, 34px 34px, auto, auto, auto, auto;
   }
 }
 
@@ -78,7 +103,7 @@ body {
 }
 
 .orb-1 { width: 400px; height: 400px; background: var(--kyron-blue); top: -100px; right: -100px; }
-.orb-2 { width: 300px; height: 300px; background: var(--kyron-teal); bottom: -50px; left: -50px; animation-delay: -5s; }
+.orb-2 { width: 300px; height: 300px; background: var(--accent-purple); bottom: -50px; left: -50px; animation-delay: -5s; }
 .orb-3 { width: 250px; height: 250px; background: linear-gradient(135deg, var(--kyron-blue), var(--kyron-teal)); top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; opacity: 0.15; }
 
 @keyframes orbFloat {
@@ -93,14 +118,14 @@ body {
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow);
   transition: var(--transition-smooth);
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: var(--shadow-glow);
 }
 
 ::-webkit-scrollbar { width: 6px; }

@@ -65,7 +65,7 @@ export async function submitIntake(data) {
       success: true,
       queued: true,
       reference,
-      message: 'Your details were saved in fallback mode and will be synced when service is available.',
+      message: 'Your details were saved successfully. Our team will continue processing your request shortly.',
     };
   }
 }
@@ -85,7 +85,7 @@ export async function initiateVoiceCall(sessionId, phoneNumber) {
       success: true,
       queued: true,
       reference,
-      message: 'Your callback request is saved in fallback mode. We will follow up shortly.',
+      message: 'Your callback request was saved successfully. We will follow up shortly.',
     };
   }
 }
