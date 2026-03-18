@@ -6,7 +6,7 @@ import './VoiceCallModal.css';
 
 export default function VoiceCallModal({ sessionId, defaultPhone, onClose }) {
   const [phone, setPhone] = useState(defaultPhone || '');
-  const [status, setStatus] = useState('idle'); // idle, calling, success, error
+  const [status, setStatus] = useState('idle'); // idle, calling, success, queued, error
   const [error, setError] = useState('');
 
   const handleCall = async () => {
@@ -21,7 +21,7 @@ export default function VoiceCallModal({ sessionId, defaultPhone, onClose }) {
     try {
       const result = await initiateVoiceCall(sessionId, phone);
       if (result.success) {
-        setStatus('success');
+        setStatus(result.queued ? 'queued' : 'success');
       } else {
         setStatus('error');
         setError(result.error || 'Unable to initiate call. Please try again.');
@@ -70,15 +70,17 @@ export default function VoiceCallModal({ sessionId, defaultPhone, onClose }) {
         </div>
 
         <h2 className="modal-title">
-          {status === 'success' ? 'Call Incoming!' : 'Continue on Phone'}
+          {status === 'success' ? 'Call Incoming!' : status === 'queued' ? 'Request Received' : 'Continue on Phone'}
         </h2>
         <p className="modal-desc">
           {status === 'success'
             ? 'Your phone should be ringing shortly. The AI will continue your conversation with full context.'
+            : status === 'queued'
+              ? 'We have logged your callback request safely and will follow up shortly.'
             : 'We\'ll call your phone so you can continue this conversation with our AI voice assistant. The AI will remember everything from this chat.'}
         </p>
 
-        {status !== 'success' && (
+        {status !== 'success' && status !== 'queued' && (
           <>
             <div className="phone-input-group">
               <Phone size={16} className="phone-icon" />
@@ -123,7 +125,7 @@ export default function VoiceCallModal({ sessionId, defaultPhone, onClose }) {
           </>
         )}
 
-        {status === 'success' && (
+        {(status === 'success' || status === 'queued') && (
           <button className="call-btn btn-glass" onClick={onClose}>
             Got it
           </button>

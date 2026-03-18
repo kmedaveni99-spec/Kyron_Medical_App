@@ -15,6 +15,7 @@ class ChatResponse(BaseModel):
 
 
 class PatientIntake(BaseModel):
+    session_id: Optional[str] = None
     first_name: str
     last_name: str
     date_of_birth: str  # YYYY-MM-DD

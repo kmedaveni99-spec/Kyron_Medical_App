@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Phone, Calendar, MapPin, Pill, Sparkles } from 'lucide-react';
+import { Send, Phone, Calendar, MapPin, Pill, Sparkles, ClipboardList } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import VoiceCallModal from './VoiceCallModal';
 import SlotPicker from './SlotPicker';
+import IntakeFormCard from './IntakeFormCard';
 import { sendMessage } from '../api/client';
 import './ChatWindow.css';
 
@@ -14,14 +15,20 @@ const QUICK_ACTIONS = [
   { icon: <MapPin size={15} />, label: 'Office Info', message: 'What are your office hours and address?' },
 ];
 
+const INITIAL_WELCOME =
+  "Hello! Welcome to Kyron Medical Practice. I'm Kyron, your AI assistant. " +
+  'I can help with scheduling, prescription refill status, and office information. ' +
+  'How can I help you today?';
+
 export default function ChatWindow({ sessionId }) {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([{ role: 'assistant', content: INITIAL_WELCOME }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [patientPhone, setPatientPhone] = useState('');
   const [showSlots, setShowSlots] = useState(null);
-  const [hasStarted, setHasStarted] = useState(false);
+  const [showIntakeForm, setShowIntakeForm] = useState(false);
+  const [hasSubmittedIntake, setHasSubmittedIntake] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -33,13 +40,6 @@ export default function ChatWindow({ sessionId }) {
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
 
-  // Send initial greeting
-  useEffect(() => {
-    if (!hasStarted) {
-      setHasStarted(true);
-      handleSend('Hello');
-    }
-  }, []);
 
   const handleSend = async (messageText) => {
     const text = messageText || input.trim();
@@ -56,6 +56,11 @@ export default function ChatWindow({ sessionId }) {
 
       if (response.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: response.reply }]);
+
+        const asksForIntake = /full name|date of birth|phone number|email address/i.test(response.reply);
+        if (asksForIntake && !hasSubmittedIntake) {
+          setShowIntakeForm(true);
+        }
       }
 
       // Handle UI actions from the backend
@@ -63,8 +68,15 @@ export default function ChatWindow({ sessionId }) {
         setShowSlots(response.data.slots);
       }
 
+      if (response.action === 'show_intake_form') {
+        if (!hasSubmittedIntake) {
+          setShowIntakeForm(true);
+        }
+      }
+
       if (response.action === 'appointment_booked' && response.data) {
         setShowSlots(null);
+        setShowIntakeForm(false);
         setMessages(prev => [...prev, {
           role: 'system',
           content: 'appointment_booked',
@@ -123,6 +135,27 @@ export default function ChatWindow({ sessionId }) {
 
   const showQuickActions = messages.length <= 1;
 
+  const handleIntakeSubmitted = async (result, form) => {
+    setHasSubmittedIntake(true);
+    setShowIntakeForm(false);
+    if (result?.patient_phone) {
+      setPatientPhone(result.patient_phone);
+    }
+
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: `I submitted my details for ${form.reason}.` }
+    ]);
+
+    await handleSend(
+      `I have already submitted my complete intake details via the patient form for this session. ` +
+      `Please do not ask again for full name, date of birth, phone number, or email. ` +
+      `Continue scheduling now: match me to a specialist for reason \"${form.reason}\" and show available slots. ` +
+      `Patient details: first name ${form.first_name}, last name ${form.last_name}, ` +
+      `DOB ${form.date_of_birth}, phone ${form.phone}, email ${form.email}, sms opt in ${form.sms_opt_in}.`
+    );
+  };
+
   return (
     <div className="chat-container glass-card">
       {/* Messages Area */}
@@ -141,6 +174,21 @@ export default function ChatWindow({ sessionId }) {
             className="slot-picker-wrapper"
           >
             <SlotPicker slots={showSlots} onSelect={handleSlotSelect} />
+          </motion.div>
+        )}
+
+        {/* Intake Form */}
+        {showIntakeForm && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="intake-form-wrapper"
+          >
+            <IntakeFormCard
+              sessionId={sessionId}
+              onSubmitted={handleIntakeSubmitted}
+              onClose={() => setShowIntakeForm(false)}
+            />
           </motion.div>
         )}
 
@@ -187,6 +235,13 @@ export default function ChatWindow({ sessionId }) {
             disabled={isLoading}
           />
           <div className="input-actions">
+            <button
+              className="intake-btn"
+              onClick={() => setShowIntakeForm(prev => !prev)}
+              title="Open patient details form"
+            >
+              <ClipboardList size={18} />
+            </button>
             <button
               className="voice-call-btn"
               onClick={() => setShowVoiceModal(true)}

@@ -100,6 +100,26 @@
   transition: var(--transition-smooth);
 }
 
+.intake-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(10, 110, 189, 0.3);
+  background: rgba(10, 110, 189, 0.1);
+  color: #48a6e4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.intake-btn:hover {
+  background: rgba(10, 110, 189, 0.2);
+  border-color: rgba(10, 110, 189, 0.45);
+  transform: scale(1.05);
+}
+
 .voice-call-btn:hover {
   background: rgba(18, 168, 157, 0.2);
   border-color: rgba(18, 168, 157, 0.5);
@@ -150,6 +170,10 @@
 }
 
 .slot-picker-wrapper {
+  padding: 8px 0;
+}
+
+.intake-form-wrapper {
   padding: 8px 0;
 }
 

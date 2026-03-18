@@ -106,7 +106,7 @@ async def voice_respond(
 
     # Get AI response
     ctx = session_contexts.get(session_id, {})
-    reply, tool_calls = await get_ai_response(history, ctx)
+    reply, tool_calls = await get_ai_response(history, ctx, session_id=session_id)
 
     # For voice, we skip complex tool calls and just give a conversational response
     # (booking via voice would need more sophisticated handling)

@@ -12,6 +12,7 @@ from app.services.doctor_matcher import match_doctor
 from app.services.scheduling import get_available_slots, book_appointment
 from app.services.email_service import send_appointment_confirmation
 from app.services.sms_service import send_appointment_sms
+from app.services.ai_engine import sync_mock_intake_state
 
 router = APIRouter()
 
@@ -124,6 +125,7 @@ async def execute_tool_call(
         if missing:
             return {
                 "success": False,
+                "missing_fields": missing,
                 "message": f"I still need the patient's {', '.join(missing)} before I can register them. Please ask the patient for this information."
             }
 
@@ -293,7 +295,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
     ctx = session_contexts.get(session_id, {})
 
     # Get AI response
-    reply, tool_calls = await get_ai_response(history, ctx)
+    reply, tool_calls = await get_ai_response(history, ctx, session_id=session_id)
 
     # Process tool calls iteratively
     max_iterations = 5
@@ -316,6 +318,10 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
             if tc["name"] == "collect_patient_intake" and result.get("success"):
                 action = "patient_registered"
                 action_data = {"patient_id": result["patient_id"]}
+            elif tc["name"] == "collect_patient_intake" and not result.get("success"):
+                if result.get("missing_fields"):
+                    action = "show_intake_form"
+                    action_data = {"missing_fields": result.get("missing_fields", [])}
             elif tc["name"] == "get_available_slots" and result.get("success"):
                 action = "show_slots"
                 action_data = {"slots": result["slots"]}
@@ -331,7 +337,7 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 
         # Continue conversation with tool results
         reply, tool_calls = await get_ai_response_with_tool_results(
-            history, tool_results, tool_calls, session_contexts.get(session_id, {})
+            history, tool_results, tool_calls, session_contexts.get(session_id, {}), session_id=session_id
         )
 
     # Save assistant reply
@@ -361,9 +367,44 @@ async def submit_intake(intake: PatientIntake, db: AsyncSession = Depends(get_db
     await db.commit()
     await db.refresh(patient)
 
+    if intake.session_id:
+        conv_result = await db.execute(
+            select(Conversation).where(Conversation.session_id == intake.session_id)
+        )
+        conversation = conv_result.scalars().first()
+        if conversation:
+            conversation.patient_id = patient.id
+            await db.commit()
+
+        session_contexts[intake.session_id] = {
+            **session_contexts.get(intake.session_id, {}),
+            "patient": {
+                "id": patient.id,
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "phone": patient.phone,
+                "email": patient.email,
+                "sms_opt_in": patient.sms_opt_in,
+            }
+        }
+
+        sync_mock_intake_state(
+            intake.session_id,
+            {
+                "first_name": intake.first_name,
+                "last_name": intake.last_name,
+                "date_of_birth": intake.date_of_birth,
+                "phone": intake.phone,
+                "email": intake.email,
+                "reason": intake.reason,
+            }
+        )
+
     return {
         "success": True,
         "patient_id": patient.id,
+        "patient_phone": patient.phone,
+        "patient_email": patient.email,
         "message": f"Welcome, {patient.first_name}!"
     }
 

@@ -57,15 +57,9 @@ async def get_doctors(db: AsyncSession = Depends(get_db)):
 @router.get("/services/status")
 async def service_status():
     """Check which services are configured and active."""
-    from app.services.ai_engine import PROVIDER, MODEL, get_ai_runtime_status
-    ai_runtime = get_ai_runtime_status()
     return {
         "ai": {
-            "provider": PROVIDER,
-            "model": MODEL,
-            "status": "active" if PROVIDER != "mock" else "fallback (mock)",
-            "provider_chain": ai_runtime["provider_chain"],
-            "last_successful_provider": ai_runtime["last_successful_provider"]
+            "status": "available"
         },
         "email": {
             "provider": "SendGrid" if settings.sendgrid_api_key else ("Gmail SMTP" if settings.smtp_email else "File Fallback"),

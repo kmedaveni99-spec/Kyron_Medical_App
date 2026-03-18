@@ -1,14 +1,15 @@
-"""AI Conversational Engine — multi-provider: OpenAI / Groq / Gemini / Mock fallback."""
+"""AI Conversational Engine — multi-provider with resilient failover."""
 import json
 import re
 import datetime
 from typing import Optional
 from openai import AsyncOpenAI
 from app.config import settings
+from app.services.local_fallback_store import save_fallback_event
 
 # --------------- Provider Setup ---------------
-# Priority: OpenAI -> Groq -> Gemini -> Mock
-# Groq uses the OpenAI-compatible API, so the same client interface works.
+# Priority: OpenAI -> Groq -> OpenRouter -> Gemini -> Ollama -> Mock
+# Groq/OpenRouter/Ollama use OpenAI-compatible APIs.
 
 AVAILABLE_PROVIDERS: list[dict] = []
 
@@ -22,10 +23,20 @@ if settings.openai_api_key:
 if settings.groq_api_key:
     AVAILABLE_PROVIDERS.append({
         "name": "groq",
-        "model": "llama-3.3-70b-versatile",
+        "model": "qwen/qwen3-32b",
         "client": AsyncOpenAI(
             api_key=settings.groq_api_key,
             base_url="https://api.groq.com/openai/v1"
+        ),
+    })
+
+if settings.openrouter_api_key:
+    AVAILABLE_PROVIDERS.append({
+        "name": "openrouter",
+        "model": settings.openrouter_model,
+        "client": AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
         ),
     })
 
@@ -34,6 +45,17 @@ if settings.google_api_key:
         "name": "gemini",
         "model": "gemini-2.0-flash",
         "client": None,
+    })
+
+# Optional local fallback (no API key needed in default localhost setup).
+if settings.ollama_base_url:
+    AVAILABLE_PROVIDERS.append({
+        "name": "ollama",
+        "model": settings.ollama_model,
+        "client": AsyncOpenAI(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+        ),
     })
 
 if AVAILABLE_PROVIDERS:
@@ -48,6 +70,7 @@ else:
 
 USE_MOCK = not AVAILABLE_PROVIDERS
 LAST_SUCCESSFUL_PROVIDER: dict | None = None
+LAST_FAILED_PROVIDER: dict | None = None
 
 
 def _set_last_successful_provider(provider: dict):
@@ -60,6 +83,25 @@ def _set_last_successful_provider(provider: dict):
     }
 
 
+def _set_last_failed_provider(provider: dict, error: Exception):
+    """Persist the most recent provider failure for observability."""
+    global LAST_FAILED_PROVIDER
+    LAST_FAILED_PROVIDER = {
+        "name": provider["name"],
+        "model": provider["model"],
+        "error": f"{type(error).__name__}: {error}",
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+    }
+    save_fallback_event(
+        "ai_provider_error",
+        {
+            "provider": provider["name"],
+            "model": provider["model"],
+            "error": f"{type(error).__name__}: {error}",
+        },
+    )
+
+
 def get_ai_runtime_status() -> dict:
     """Return configured provider chain and last success metadata."""
     return {
@@ -68,6 +110,7 @@ def get_ai_runtime_status() -> dict:
             "model": p["model"]
         } for p in AVAILABLE_PROVIDERS],
         "last_successful_provider": LAST_SUCCESSFUL_PROVIDER,
+        "last_failed_provider": LAST_FAILED_PROVIDER,
     }
 
 SYSTEM_PROMPT = """You are Kyron, a friendly and professional AI medical assistant for Kyron Medical Practice. You help patients with:
@@ -223,6 +266,26 @@ def _get_mock_state(session_id: str) -> MockConversationState:
     return mock_states[session_id]
 
 
+def sync_mock_intake_state(session_id: str, intake_data: dict):
+    """Sync externally collected intake data into mock state progression."""
+    if not session_id:
+        return
+
+    state = _get_mock_state(session_id)
+    state.collected["first_name"] = (intake_data.get("first_name") or "").strip()
+    state.collected["last_name"] = (intake_data.get("last_name") or "").strip()
+    state.collected["dob"] = (intake_data.get("date_of_birth") or "").strip()
+    state.collected["phone"] = (intake_data.get("phone") or "").strip()
+    state.collected["email"] = (intake_data.get("email") or "").strip()
+
+    reason = (intake_data.get("reason") or "").strip().lower()
+    if reason:
+        state.matched_specialty = reason
+
+    # Intake is complete, so next mock turn should continue to doctor matching.
+    state.stage = "has_info"
+
+
 async def get_mock_response(user_message: str, session_id: str = "",
                              conversation_history: list = None, session_context: dict = None):
     """Rule-based mock AI for when OpenAI API is unavailable."""
@@ -230,8 +293,9 @@ async def get_mock_response(user_message: str, session_id: str = "",
     state = _get_mock_state(session_id)
     ctx = session_context or {}
 
-    # Greetings
-    if state.stage == "greeting" or msg in ["hello", "hi", "hey", "help", "start", ""]:
+    # Greetings: only auto-greet on explicit greeting-like input.
+    greeting_inputs = ["hello", "hi", "hey", "help", "start", ""]
+    if (state.stage == "greeting" and msg in greeting_inputs) or msg in greeting_inputs:
         state.stage = "asked_reason"
         return (
             "Hello! 👋 Welcome to Kyron Medical Practice. I'm Kyron, your AI assistant. "
@@ -241,7 +305,8 @@ async def get_mock_response(user_message: str, session_id: str = "",
 
     # Office info
     office_kw = ["office", "hours", "address", "location", "where", "when", "open", "close", "phone", "contact"]
-    if any(kw in msg for kw in office_kw):
+    in_scheduling_flow = state.stage in {"asked_reason", "collecting_info", "has_info", "matching", "showing_slots", "booking"}
+    if any(kw in msg for kw in office_kw) and not in_scheduling_flow:
         return "", [{"id": "mock_1", "name": "get_office_info", "arguments": {}}]
 
     # Prescription
@@ -264,7 +329,7 @@ async def get_mock_response(user_message: str, session_id: str = "",
 
     # Scheduling - detect body part
     schedule_kw = ["schedule", "appointment", "book", "see a doctor", "visit", "check-up", "checkup"]
-    if any(kw in msg for kw in schedule_kw) or state.stage in ["asked_reason", "collecting_info"]:
+    if any(kw in msg for kw in schedule_kw) or state.stage in ["greeting", "asked_reason", "collecting_info"]:
         detected = None
         for specialty, keywords in MOCK_BODY_KEYWORDS.items():
             if any(kw in msg for kw in keywords):
@@ -282,7 +347,7 @@ async def get_mock_response(user_message: str, session_id: str = "",
                 f"You can share all of this in one message!"
             ), None
 
-        if state.stage == "asked_reason":
+        if state.stage in ("greeting", "asked_reason"):
             state.stage = "collecting_info"
             return (
                 "I'd be happy to help you schedule an appointment! "
@@ -301,6 +366,16 @@ async def get_mock_response(user_message: str, session_id: str = "",
         dob_match = re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', msg)
         if dob_match:
             state.collected["dob"] = dob_match.group()
+
+        # Accept common full-name formats like "suresh,raina" or "Suresh Raina".
+        name_pair_match = re.search(
+            r'^\s*([A-Za-z][A-Za-z\'-]{1,})\s*[,\s]+\s*([A-Za-z][A-Za-z\'-]{1,})',
+            user_message.strip()
+        )
+        if name_pair_match:
+            state.collected["first_name"] = name_pair_match.group(1).title()
+            state.collected["last_name"] = name_pair_match.group(2).title()
+
         words = user_message.split()
         name_words = [w for w in words if len(w) > 1 and w[0].isupper() and w.isalpha()]
         if name_words and "first_name" not in state.collected:
@@ -309,7 +384,7 @@ async def get_mock_response(user_message: str, session_id: str = "",
                 state.collected["last_name"] = name_words[1]
 
         needed = []
-        if "first_name" not in state.collected:
+        if "first_name" not in state.collected or "last_name" not in state.collected:
             needed.append("full name")
         if "dob" not in state.collected:
             needed.append("date of birth")
@@ -514,7 +589,7 @@ async def _call_gemini(provider: dict, messages, use_tools=True):
 
 async def _call_provider(provider: dict, messages, use_tools=True):
     """Dispatch call to the appropriate provider implementation."""
-    if provider["name"] in ("openai", "groq"):
+    if provider["name"] in ("openai", "groq", "openrouter", "ollama"):
         return await _call_openai_compatible(provider, messages, use_tools=use_tools)
     if provider["name"] == "gemini":
         if any(msg.get("role") == "tool" for msg in messages):
@@ -536,6 +611,7 @@ async def _try_provider_chain(messages, use_tools=True):
             return reply, tool_calls
         except Exception as e:
             last_error = e
+            _set_last_failed_provider(provider, e)
             print(f"{provider['name']} error: {e}")
 
     if last_error:
@@ -609,6 +685,7 @@ async def get_ai_response_with_tool_results(
             _set_last_successful_provider(gemini)
             return reply, tool_calls
         except Exception as e:
+            _set_last_failed_provider(gemini, e)
             print(f"gemini fallback error: {e}")
 
     return await _mock_tool_result_response(tool_results, session_context, session_id)
