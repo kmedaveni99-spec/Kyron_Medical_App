@@ -142,6 +142,38 @@ Kyron-AI-App/
 - SMS requires explicit opt-in
 - HIPAA considerations noted for production deployment
 
+## ✅ Interview Submission Checklist
+
+Use this checklist before submitting:
+
+- [ ] **Behavioral interview video segment (first 3-5 minutes)**
+  - What makes you unique
+  - What you bring to Kyron culture
+  - Outcome-oriented vs effort-oriented mindset
+  - How you ramp quickly on new stacks (with examples)
+- [ ] **Live demo video segment (customer walkthrough)**
+  - Chat scheduling flow end-to-end
+  - Voice handoff from web chat and context continuity
+  - Refill and office info workflows
+- [ ] **Code walkthrough video segment**
+  - Architecture overview (frontend, backend, voice)
+  - Error handling and fallback strategy
+  - Safety constraints (no medical advice)
+- [ ] **Public GitHub link** to this repository
+- [ ] **Public app URL (HTTPS recommended)**
+- [ ] **Twilio test readiness**
+  - Trial account uses verified numbers only
+  - `APP_BASE_URL` points to a publicly reachable domain/IP
+- [ ] **Known limitations documented** (for evaluator clarity)
+
+Suggested final links section to include in your submission form:
+
+```text
+Video walkthrough:
+GitHub repository:
+Live app URL:
+```
+
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) for details.
